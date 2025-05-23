@@ -1,0 +1,55 @@
+{
+    "name": "Python Development",
+    "dockerComposeFile": ["../docker-compose.yml"],
+    "service": "app",
+    "workspaceFolder": "/app",
+    "customizations": {
+      "vscode": {
+        "extensions": [
+          "ms-python.python",
+          "ms-python.vscode-pylance",
+          "charliermarsh.ruff",
+          "github.vscode-github-actions",
+          "github.copilot",
+          "github.copilot-chat",
+          "eamodio.gitlens",
+          "ms-azuretools.vscode-docker",
+          "rooveterinaryinc.roo-cline",
+          "saoudrizwan.claude-dev"
+        ],
+        "settings": {
+          "python.defaultInterpreterPath": "/usr/local/bin/python",
+          "python.testing.pytestEnabled": true,
+          "python.testing.unittestEnabled": false,
+          "python.testing.nosetestsEnabled": false,
+          "python.formatting.provider": "none",
+          "editor.formatOnSave": true,
+          "editor.codeActionsOnSave": {
+            "source.fixAll": true,
+            "source.organizeImports": true
+          },
+          "[python]": {
+            "editor.defaultFormatter": "charliermarsh.ruff",
+            "editor.formatOnSave": true,
+            "editor.codeActionsOnSave": {
+              "source.fixAll": true,
+              "source.organizeImports": true
+            }
+          }
+        }
+      }
+    },
+    "containerEnv": {
+      "DISPLAY": "dummy",
+      "PYTHONUNBUFFERED": "True",
+      "UV_LINK_MODE": "copy",
+      "UV_PROJECT_ENVIRONMENT": "/home/vscode/.venv",
+    },
+    "features": {
+      "ghcr.io/devcontainers/features/git:1": {},
+      "ghcr.io/devcontainers/features/github-cli:1": {},
+      "ghcr.io/dhoeric/features/hadolint:1": {}
+    },
+    "postCreateCommand": "uv sync --frozen",
+    "postStartCommand": "uv run pre-commit install",
+  }
