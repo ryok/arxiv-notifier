@@ -1,9 +1,9 @@
 [project]
-name = "python-boilerplate"
+name = "arxiv-notifier"
 version = "0.1.0"
-description = "再利用可能なPythonプロジェクトの基本構造"
+description = "arXivから論文を自動取得してSlackとNotionに通知するシステム"
 readme = "README.md"
-requires-python = ">=3.8"
+requires-python = ">=3.11"
 license = {text = "MIT"}
 authors = [
     {name = "ryok", email = "atribecalledquest448@gmail.com"}
@@ -13,13 +13,21 @@ classifiers = [
     "Intended Audience :: Developers",
     "License :: OSI Approved :: MIT License",
     "Programming Language :: Python :: 3",
-    "Programming Language :: Python :: 3.8",
-    "Programming Language :: Python :: 3.9",
-    "Programming Language :: Python :: 3.10",
     "Programming Language :: Python :: 3.11",
+    "Programming Language :: Python :: 3.12",
 ]
 dependencies = [
-    "pyyaml>=6.0",
+    "httpx>=0.25.0",
+    "pydantic>=2.5.0",
+    "pydantic-settings>=2.1.0",
+    "sqlalchemy>=2.0.0",
+    "schedule>=1.2.0",
+    "python-dotenv>=1.0.0",
+    "loguru>=0.7.0",
+    "beautifulsoup4>=4.12.0",
+    "lxml>=5.0.0",
+    "tenacity>=8.2.0",
+    "click>=8.1.0",
 ]
 
 [project.optional-dependencies]
@@ -37,11 +45,11 @@ dev = [
 "Bug Tracker" = "https://github.com/yourusername/python-boilerplate/issues"
 
 [project.scripts]
-python-boilerplate = "src.cli:main"
+arxiv-notifier = "src.arxiv_notifier.main:main"
 
 [tool.setuptools]
 package-dir = {"" = "."}
-packages = ["src", "src.core"]
+packages = ["src", "src.arxiv_notifier"]
 
 [tool.black]
 line-length = 88
@@ -53,11 +61,16 @@ profile = "black"
 line_length = 88
 
 [tool.mypy]
-python_version = "3.8"
+python_version = "3.11"
 warn_return_any = true
 warn_unused_configs = true
 disallow_untyped_defs = true
 disallow_incomplete_defs = true
+plugins = ["pydantic.mypy"]
+
+[[tool.mypy.overrides]]
+module = ["schedule", "loguru"]
+ignore_missing_imports = true
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
@@ -67,9 +80,9 @@ python_classes = "Test*"
 
 [tool.ruff]
 line-length = 88
-target-version = "py38"
-select = ["E", "F", "B", "I"]
-ignore = []
+target-version = "py311"
+select = ["E", "F", "B", "I", "N", "UP", "S", "A", "C4", "T10", "SIM"]
+ignore = ["S101"]  # assert文の使用を許可（テストで使用）
 
 [build-system]
 requires = ["hatchling"]
