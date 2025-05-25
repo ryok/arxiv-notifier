@@ -1,141 +1,327 @@
-# Python ボイラープレート
+# arXiv Notifier
 
-再利用可能なPythonプロジェクトの基本構造を提供するボイラープレートです。
+arXivから指定したキーワードに関する最新の論文を定期的に取得し、SlackとNotionに自動投稿するシステムです。
 
 ## 機能
 
-- 基本的なパッケージ構造
-- ロギング機能
-- コマンドライン引数の処理
-- 設定ファイル読み込み（YAML/JSON）
-- 単体テスト環境
-
-## 要件
-
-- Python 3.8以上
-- PyYAML 6.0以上
+- 🔍 **論文検索**: arXiv APIを使用して、指定したキーワードやカテゴリの論文を自動取得
+- 💬 **Slack通知**: 新着論文をSlackチャンネルに自動投稿
+- 📝 **Notion連携**: 論文情報をNotionデータベースに自動保存
+- 🔄 **重複管理**: 処理済み論文を記録し、重複投稿を防止
+- ⏰ **スケジュール実行**: 定期的な自動実行（時刻指定または間隔指定）
+- 📊 **ログ管理**: 詳細なログ出力とローテーション機能
 
 ## インストール
 
-### 開発環境のセットアップ（uvを使用）
+### 前提条件
+
+- Python 3.11以上
+- uv (Pythonパッケージマネージャー)
+
+### セットアップ
+
+1. リポジトリをクローン
+```bash
+git clone https://github.com/yourusername/arxiv-notifier.git
+cd arxiv-notifier
+```
+
+2. 依存関係をインストール
+```bash
+uv sync
+```
+
+3. 環境変数を設定
+```bash
+# サンプルファイルを生成
+uv run arxiv-notifier generate-env
+
+# .envファイルを作成して編集
+cp .env.example .env
+```
+
+## 設定
+
+### 環境変数
+
+`.env`ファイルで以下の設定を行います：
+
+#### arXiv設定
+- `ARXIV_KEYWORDS`: 検索キーワード（カンマ区切り）
+- `ARXIV_CATEGORIES`: 検索カテゴリ（カンマ区切り）
+- `ARXIV_MAX_RESULTS`: 一度に取得する最大論文数
+- `ARXIV_DAYS_BACK`: 何日前までの論文を取得するか
+
+#### Slack設定（オプション）
+- `SLACK_WEBHOOK_URL`: Slack Webhook URL
+- `SLACK_CHANNEL`: 投稿先チャンネル（Webhookで指定済みの場合は不要）
+- `SLACK_USERNAME`: Bot表示名
+- `SLACK_ICON_EMOJI`: Botアイコン絵文字
+
+#### Notion設定（オプション）
+- `NOTION_API_KEY`: Notion Integration Token
+- `NOTION_DATABASE_ID`: 論文を保存するデータベースID
+
+#### スケジュール設定
+- `SCHEDULE_TIME`: 実行時刻（HH:MM形式）または
+- `SCHEDULE_INTERVAL_HOURS`: 実行間隔（時間）
+
+### Slack Webhookの取得方法
+
+1. [Slack App Directory](https://api.slack.com/apps)にアクセス
+2. 「Create New App」→「From scratch」を選択
+3. App名とワークスペースを設定
+4. 「Incoming Webhooks」を有効化
+5. 「Add New Webhook to Workspace」でチャンネルを選択
+6. 生成されたWebhook URLをコピー
+
+### Notion Integrationの設定方法
+
+1. [Notion Integrations](https://www.notion.so/my-integrations)にアクセス
+2. 「New integration」をクリック
+3. 名前を設定して作成
+4. 「Internal Integration Token」をコピー
+5. Notionで論文保存用のデータベースを作成
+6. データベースページで「...」→「Add connections」からIntegrationを追加
+7. データベースIDをURLから取得（`https://www.notion.so/xxxxx?v=yyyyy`のxxxxxの部分）
+
+## 使用方法
+
+### コマンド一覧
 
 ```bash
-# リポジトリのクローン
-git clone https://github.com/yourusername/python-boilerplate.git
-cd python-boilerplate
+# ヘルプを表示
+uv run arxiv-notifier --help
 
-# uvのインストール（まだインストールしていない場合）
-pip install uv
+# 設定を確認
+uv run arxiv-notifier config
 
-# uvを使用して仮想環境の作成と依存パッケージのインストール
-uv venv
-source .venv/bin/activate  # Linuxの場合
-# または
-.venv\Scripts\activate  # Windowsの場合
+# 接続テスト
+uv run arxiv-notifier test
 
-# 開発用依存パッケージのインストール
-uv pip install -e ".[dev]"
+# 一度だけ実行
+uv run arxiv-notifier once
+
+# スケジューラーを起動（定期実行）
+uv run arxiv-notifier run
+
+# スケジューラーを起動（起動時に即実行）
+uv run arxiv-notifier run --immediately
 ```
 
-### 従来の方法（pipを使用）
+### Docker での実行
 
 ```bash
-# リポジトリのクローン
-git clone https://github.com/yourusername/python-boilerplate.git
-cd python-boilerplate
+# イメージをビルド
+docker build -t arxiv-notifier .
 
-# 仮想環境の作成と有効化
-python -m venv venv
-source venv/bin/activate  # Linuxの場合
-# または
-venv\Scripts\activate  # Windowsの場合
-
-# 開発用依存パッケージのインストール
-pip install -e ".[dev]"
+# コンテナを実行
+docker run -d \
+  --name arxiv-notifier \
+  -v $(pwd)/.env:/app/.env \
+  -v $(pwd)/logs:/app/logs \
+  -v $(pwd)/arxiv_papers.db:/app/arxiv_papers.db \
+  arxiv-notifier
 ```
 
-## 使い方
-
-### コマンドラインからの実行
+### Docker Compose での実行
 
 ```bash
-# ヘルプの表示
-python-boilerplate --help
+# 起動
+docker-compose up -d
 
-# バージョン情報の表示
-python-boilerplate --version
+# ログを確認
+docker-compose logs -f
 
-# アプリケーションの実行
-python-boilerplate run
-
-# 設定ファイルを指定して実行
-python-boilerplate -c config.yaml run
-
-# ログレベルを指定して実行
-python-boilerplate -l DEBUG run
-
-# アプリケーションの初期化
-python-boilerplate init
+# 停止
+docker-compose down
 ```
 
-### ライブラリとしての使用
+## 外部スケジューラーとの連携
 
-```python
-from src.core.config import ConfigManager
-from src.core.logger import Logger
-from src.core.main import Application
+内蔵のスケジューラーの代わりに、crontabやGitHub Actionsなどの外部スケジューリングシステムを使用することも可能です。
 
-# 設定の読み込み
-config = ConfigManager("config.yaml")
+### crontab での定期実行
 
-# ロガーの初期化
-logger = Logger("my-app", level="INFO", log_file="app.log")
+crontabを使用して定期実行する場合は、`arxiv-notifier once`コマンドまたは提供されているスクリプトを使用します。
 
-# アプリケーションの実行
-app = Application(config_path="config.yaml")
-app.run()
-```
-
-## プロジェクト構造
-
-```
-python-boilerplate/
-├── docs/               # ドキュメント
-│   └── design.md       # 設計書
-├── src/                # ソースコード
-│   ├── __init__.py     # パッケージ定義
-│   ├── core/           # コア機能
-│   │   ├── __init__.py # パッケージ定義
-│   │   ├── config.py   # 設定管理
-│   │   ├── logger.py   # ロギング
-│   │   └── main.py     # メイン機能
-│   └── cli.py          # コマンドラインインターフェース
-├── tests/              # テストコード
-│   ├── __init__.py     # パッケージ定義
-│   ├── core/           # コア機能のテスト
-│   │   ├── __init__.py # パッケージ定義
-│   │   ├── test_config.py  # 設定管理のテスト
-│   │   ├── test_logger.py  # ロギングのテスト
-│   │   └── test_main.py    # メイン機能のテスト
-│   └── test_cli.py     # CLIのテスト
-├── .gitignore          # Git除外設定
-├── pyproject.toml      # プロジェクト設定
-└── README.md           # プロジェクト説明
-```
-
-## テスト
+#### 方法1: 直接コマンドを実行
 
 ```bash
-# すべてのテストを実行
-pytest
+# crontabを編集
+crontab -e
 
-# カバレッジレポートを生成
-pytest --cov=src
+# 毎日午前9時に実行する例
+0 9 * * * cd /path/to/arxiv-notifier && /path/to/uv run arxiv-notifier once >> /var/log/arxiv-notifier.log 2>&1
+
+# 6時間ごとに実行する例
+0 */6 * * * cd /path/to/arxiv-notifier && /path/to/uv run arxiv-notifier once >> /var/log/arxiv-notifier.log 2>&1
+```
+
+#### 方法2: 提供されているスクリプトを使用（推奨）
+
+```bash
+# スクリプトに実行権限を付与
+chmod +x /path/to/arxiv-notifier/scripts/run-once.sh
+
+# crontabを編集
+crontab -e
+
+# 毎日午前9時に実行する例
+0 9 * * * /path/to/arxiv-notifier/scripts/run-once.sh
+
+# 6時間ごとに実行する例
+0 */6 * * * /path/to/arxiv-notifier/scripts/run-once.sh
+```
+
+**スクリプトの利点:**
+- エラーハンドリングが組み込まれている
+- 自動的にプロジェクトディレクトリに移動
+- 専用のログファイル（`logs/crontab.log`）に出力
+- 環境変数ファイルの存在確認
+
+**注意点:**
+- 絶対パスを使用してください
+- 環境変数が正しく読み込まれることを確認してください
+- ログファイルの権限を確認してください
+
+### GitHub Actions での定期実行
+
+GitHub Actionsを使用してクラウドで定期実行することも可能です。
+
+`.github/workflows/arxiv-notifier.yml`を作成：
+
+```yaml
+name: arXiv Notifier
+
+on:
+  schedule:
+    # 毎日UTC 0:00（日本時間 9:00）に実行
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install uv
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        
+    - name: Install dependencies
+      run: uv sync
+      
+    - name: Run arXiv Notifier
+      env:
+        ARXIV_KEYWORDS: ${{ secrets.ARXIV_KEYWORDS }}
+        ARXIV_CATEGORIES: ${{ secrets.ARXIV_CATEGORIES }}
+        ARXIV_MAX_RESULTS: ${{ secrets.ARXIV_MAX_RESULTS }}
+        ARXIV_DAYS_BACK: ${{ secrets.ARXIV_DAYS_BACK }}
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
+        SLACK_USERNAME: ${{ secrets.SLACK_USERNAME }}
+        SLACK_ICON_EMOJI: ${{ secrets.SLACK_ICON_EMOJI }}
+        NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+        NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+        DATABASE_URL: "sqlite:///./arxiv_papers.db"
+        LOG_LEVEL: "INFO"
+      run: uv run arxiv-notifier once
+```
+
+**GitHub Secretsの設定:**
+
+1. GitHubリポジトリの「Settings」→「Secrets and variables」→「Actions」
+2. 「New repository secret」で以下の環境変数を設定：
+   - `ARXIV_KEYWORDS`
+   - `ARXIV_CATEGORIES`
+   - `SLACK_WEBHOOK_URL`
+   - `NOTION_API_KEY`
+   - `NOTION_DATABASE_ID`
+   - その他必要な設定値
+
+### 実行方法の比較
+
+| 方法 | メリット | デメリット | 適用場面 |
+|------|----------|------------|----------|
+| 内蔵スケジューラー | 設定が簡単、ログ管理が統合 | サーバーの常時稼働が必要 | 専用サーバーがある場合 |
+| crontab | システムレベルの信頼性、リソース効率 | 設定が複雑、ログ管理が分散 | Linuxサーバーでの運用 |
+| GitHub Actions | インフラ不要、無料枠あり | 実行時間制限、ログ保持期間制限 | 個人利用、軽量な処理 |
+
+## 開発
+
+### テストの実行
+
+```bash
+# 全テストを実行
+uv run pytest
+
+# カバレッジ付きで実行
+uv run pytest --cov=src/arxiv_notifier --cov-report=html
 
 # 特定のテストを実行
-pytest tests/core/test_config.py
+uv run pytest tests/arxiv_notifier/test_models.py
+```
+
+### コードフォーマット
+
+```bash
+# フォーマットチェック
+uv run ruff check .
+
+# 自動修正
+uv run ruff check --fix .
+
+# 型チェック
+uv run mypy src/
+```
+
+## トラブルシューティング
+
+### よくある問題
+
+1. **Slack通知が届かない**
+   - Webhook URLが正しいか確認
+   - ネットワーク接続を確認
+   - ログファイルでエラーを確認
+
+2. **Notion連携が動作しない**
+   - Integration TokenとDatabase IDが正しいか確認
+   - IntegrationがデータベースにアクセスできるかNotionで確認
+   - APIレート制限に達していないか確認
+
+3. **論文が取得できない**
+   - arXiv APIのステータスを確認
+   - キーワードやカテゴリの指定が正しいか確認
+   - ログファイルでエラーを確認
+
+### ログの確認
+
+```bash
+# 最新のログを確認
+tail -f logs/arxiv_notifier.log
+
+# エラーログのみ表示
+grep ERROR logs/arxiv_notifier.log
 ```
 
 ## ライセンス
 
-MITライセンスの下で公開されています。詳細は[LICENSE](LICENSE)ファイルを参照してください。
+MIT License
+
+## 貢献
+
+プルリクエストを歓迎します。大きな変更の場合は、まずissueを作成して変更内容を議論してください。
+
+## 作者
+
+ryok

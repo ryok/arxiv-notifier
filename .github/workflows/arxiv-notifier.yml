@@ -1,0 +1,64 @@
+name: arXiv Notifier
+
+on:
+  schedule:
+    # 毎日UTC 0:00（日本時間 9:00）に実行
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install uv
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        
+    - name: Install dependencies
+      run: uv sync
+      
+    - name: Run arXiv Notifier
+      env:
+        ARXIV_KEYWORDS: ${{ secrets.ARXIV_KEYWORDS }}
+        ARXIV_CATEGORIES: ${{ secrets.ARXIV_CATEGORIES }}
+        ARXIV_MAX_RESULTS: ${{ secrets.ARXIV_MAX_RESULTS }}
+        ARXIV_DAYS_BACK: ${{ secrets.ARXIV_DAYS_BACK }}
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
+        SLACK_USERNAME: ${{ secrets.SLACK_USERNAME }}
+        SLACK_ICON_EMOJI: ${{ secrets.SLACK_ICON_EMOJI }}
+        NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+        NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+        DATABASE_URL: "sqlite:///./arxiv_papers.db"
+        LOG_LEVEL: "INFO"
+        LOG_FILE: "logs/arxiv_notifier.log"
+        API_TIMEOUT: "30"
+        API_RETRY_COUNT: "3"
+        API_RETRY_DELAY: "5"
+      run: uv run arxiv-notifier once
+      
+    - name: Upload logs
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: arxiv-notifier-logs
+        path: logs/
+        retention-days: 30
+        
+    - name: Upload database
+      if: always()
+      uses: actions/upload-artifact@v3
+      with:
+        name: arxiv-papers-db
+        path: arxiv_papers.db
+        retention-days: 90
