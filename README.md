@@ -137,6 +137,126 @@ docker-compose logs -f
 docker-compose down
 ```
 
+## 外部スケジューラーとの連携
+
+内蔵のスケジューラーの代わりに、crontabやGitHub Actionsなどの外部スケジューリングシステムを使用することも可能です。
+
+### crontab での定期実行
+
+crontabを使用して定期実行する場合は、`arxiv-notifier once`コマンドまたは提供されているスクリプトを使用します。
+
+#### 方法1: 直接コマンドを実行
+
+```bash
+# crontabを編集
+crontab -e
+
+# 毎日午前9時に実行する例
+0 9 * * * cd /path/to/arxiv-notifier && /path/to/uv run arxiv-notifier once >> /var/log/arxiv-notifier.log 2>&1
+
+# 6時間ごとに実行する例
+0 */6 * * * cd /path/to/arxiv-notifier && /path/to/uv run arxiv-notifier once >> /var/log/arxiv-notifier.log 2>&1
+```
+
+#### 方法2: 提供されているスクリプトを使用（推奨）
+
+```bash
+# スクリプトに実行権限を付与
+chmod +x /path/to/arxiv-notifier/scripts/run-once.sh
+
+# crontabを編集
+crontab -e
+
+# 毎日午前9時に実行する例
+0 9 * * * /path/to/arxiv-notifier/scripts/run-once.sh
+
+# 6時間ごとに実行する例
+0 */6 * * * /path/to/arxiv-notifier/scripts/run-once.sh
+```
+
+**スクリプトの利点:**
+- エラーハンドリングが組み込まれている
+- 自動的にプロジェクトディレクトリに移動
+- 専用のログファイル（`logs/crontab.log`）に出力
+- 環境変数ファイルの存在確認
+
+**注意点:**
+- 絶対パスを使用してください
+- 環境変数が正しく読み込まれることを確認してください
+- ログファイルの権限を確認してください
+
+### GitHub Actions での定期実行
+
+GitHub Actionsを使用してクラウドで定期実行することも可能です。
+
+`.github/workflows/arxiv-notifier.yml`を作成：
+
+```yaml
+name: arXiv Notifier
+
+on:
+  schedule:
+    # 毎日UTC 0:00（日本時間 9:00）に実行
+    - cron: '0 0 * * *'
+  workflow_dispatch: # 手動実行も可能
+
+jobs:
+  notify:
+    runs-on: ubuntu-latest
+    
+    steps:
+    - name: Checkout repository
+      uses: actions/checkout@v4
+      
+    - name: Set up Python
+      uses: actions/setup-python@v4
+      with:
+        python-version: '3.11'
+        
+    - name: Install uv
+      run: |
+        curl -LsSf https://astral.sh/uv/install.sh | sh
+        echo "$HOME/.cargo/bin" >> $GITHUB_PATH
+        
+    - name: Install dependencies
+      run: uv sync
+      
+    - name: Run arXiv Notifier
+      env:
+        ARXIV_KEYWORDS: ${{ secrets.ARXIV_KEYWORDS }}
+        ARXIV_CATEGORIES: ${{ secrets.ARXIV_CATEGORIES }}
+        ARXIV_MAX_RESULTS: ${{ secrets.ARXIV_MAX_RESULTS }}
+        ARXIV_DAYS_BACK: ${{ secrets.ARXIV_DAYS_BACK }}
+        SLACK_WEBHOOK_URL: ${{ secrets.SLACK_WEBHOOK_URL }}
+        SLACK_CHANNEL: ${{ secrets.SLACK_CHANNEL }}
+        SLACK_USERNAME: ${{ secrets.SLACK_USERNAME }}
+        SLACK_ICON_EMOJI: ${{ secrets.SLACK_ICON_EMOJI }}
+        NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
+        NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+        DATABASE_URL: "sqlite:///./arxiv_papers.db"
+        LOG_LEVEL: "INFO"
+      run: uv run arxiv-notifier once
+```
+
+**GitHub Secretsの設定:**
+
+1. GitHubリポジトリの「Settings」→「Secrets and variables」→「Actions」
+2. 「New repository secret」で以下の環境変数を設定：
+   - `ARXIV_KEYWORDS`
+   - `ARXIV_CATEGORIES`
+   - `SLACK_WEBHOOK_URL`
+   - `NOTION_API_KEY`
+   - `NOTION_DATABASE_ID`
+   - その他必要な設定値
+
+### 実行方法の比較
+
+| 方法 | メリット | デメリット | 適用場面 |
+|------|----------|------------|----------|
+| 内蔵スケジューラー | 設定が簡単、ログ管理が統合 | サーバーの常時稼働が必要 | 専用サーバーがある場合 |
+| crontab | システムレベルの信頼性、リソース効率 | 設定が複雑、ログ管理が分散 | Linuxサーバーでの運用 |
+| GitHub Actions | インフラ不要、無料枠あり | 実行時間制限、ログ保持期間制限 | 個人利用、軽量な処理 |
+
 ## 開発
 
 ### テストの実行

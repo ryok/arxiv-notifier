@@ -85,9 +85,32 @@ def run(immediately: bool) -> None:
 
 
 @cli.command()
-def once() -> None:
+@click.option(
+    "--quiet",
+    "-q",
+    is_flag=True,
+    help="エラー以外のログ出力を抑制する（外部スケジューラー用）",
+)
+@click.option(
+    "--exit-code-on-no-new",
+    is_flag=True,
+    help="新しい論文がない場合に終了コード1で終了する",
+)
+def once(quiet: bool, exit_code_on_no_new: bool) -> None:
     """一度だけ実行."""
-    logger.info("Running one-time execution...")
+    if quiet:
+        # quietモードの場合、ログレベルをWARNINGに設定
+        from loguru import logger as loguru_logger
+
+        loguru_logger.remove()
+        loguru_logger.add(
+            sys.stderr,
+            level="WARNING",
+            format="<level>{level}: {message}</level>",
+        )
+        logger.info("Running one-time execution (quiet mode)...")
+    else:
+        logger.info("Running one-time execution...")
 
     scheduler = create_scheduler()
     results = scheduler.run_once()
@@ -97,13 +120,20 @@ def once() -> None:
         logger.error(f"Execution failed with errors: {results['errors']}")
         sys.exit(1)
     else:
-        logger.info(
-            f"Execution completed successfully. "
-            f"Fetched: {results.get('fetched', 0)}, "
-            f"New: {results.get('new', 0)}, "
-            f"Slack: {results.get('slack_posted', 0)}, "
-            f"Notion: {results.get('notion_added', 0)}"
-        )
+        if not quiet:
+            logger.info(
+                f"Execution completed successfully. "
+                f"Fetched: {results.get('fetched', 0)}, "
+                f"New: {results.get('new', 0)}, "
+                f"Slack: {results.get('slack_posted', 0)}, "
+                f"Notion: {results.get('notion_added', 0)}"
+            )
+
+        # 新しい論文がない場合の処理
+        if exit_code_on_no_new and results.get("new", 0) == 0:
+            if not quiet:
+                logger.info("No new papers found, exiting with code 1")
+            sys.exit(1)
 
 
 @cli.command()
