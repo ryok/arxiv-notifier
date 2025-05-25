@@ -45,11 +45,7 @@ dev = [
 "Bug Tracker" = "https://github.com/yourusername/python-boilerplate/issues"
 
 [project.scripts]
-arxiv-notifier = "src.arxiv_notifier.main:main"
-
-[tool.setuptools]
-package-dir = {"" = "."}
-packages = ["src", "src.arxiv_notifier"]
+arxiv-notifier = "arxiv_notifier.main:main"
 
 [tool.black]
 line-length = 88
@@ -87,3 +83,9 @@ ignore = ["S101"]  # assert文の使用を許可（テストで使用）
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[tool.hatch.build.targets.wheel]
+packages = ["src/arxiv_notifier"]
+
+[tool.hatch.build]
+sources = ["src"]
