@@ -119,11 +119,14 @@ class NotionClient:
             logger.error(f"Failed to get database schema: {e}")
             raise
 
-    def add_paper(self, paper: Paper) -> dict | None:
+    def add_paper(
+        self, paper: Paper, japanese_summary: str | None = None
+    ) -> dict | None:
         """論文をNotionデータベースに追加.
 
         Args:
             paper: 論文情報
+            japanese_summary: 日本語要約（オプション）
 
         Returns:
             作成されたページ情報、失敗時はNone
@@ -132,6 +135,12 @@ class NotionClient:
         try:
             # プロパティを構築
             properties = paper.to_notion_properties()
+
+            # 日本語要約がある場合は追加
+            if japanese_summary:
+                properties["Japanese Summary"] = {
+                    "rich_text": [{"text": {"content": japanese_summary}}]
+                }
 
             # ページ作成リクエスト
             page_data = {
@@ -279,6 +288,7 @@ class NotionClient:
                     "Title": {"title": {}},
                     "Authors": {"rich_text": {}},
                     "Abstract": {"rich_text": {}},
+                    "Japanese Summary": {"rich_text": {}},
                     "Categories": {"multi_select": {}},
                     "Published Date": {"date": {}},
                     "Updated Date": {"date": {}},

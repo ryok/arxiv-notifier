@@ -119,6 +119,16 @@ class Settings(BaseSettings):
         description="APIリトライ間隔（秒）",
     )
 
+    # OpenAI設定
+    openai_api_key: str | None = Field(
+        default=None,
+        description="OpenAI APIキー",
+    )
+    openai_model: str = Field(
+        default="gpt-3.5-turbo",
+        description="使用するOpenAIモデル",
+    )
+
     @field_validator("arxiv_keywords", "arxiv_categories", mode="after")
     @classmethod
     def ensure_list(cls, v: str | list[str]) -> list[str]:

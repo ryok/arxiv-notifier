@@ -62,6 +62,10 @@ cp .env.example .env
 - `NOTION_API_KEY`: Notion Integration Token
 - `NOTION_DATABASE_ID`: 論文を保存するデータベースID
 
+#### OpenAI設定（オプション）
+- `OPENAI_API_KEY`: OpenAI APIキー（日本語要約生成用）
+- `OPENAI_MODEL`: 使用するGPTモデル（デフォルト: gpt-3.5-turbo）
+
 #### スケジュール設定
 - `SCHEDULE_TIME`: 実行時刻（HH:MM形式）または
 - `SCHEDULE_INTERVAL_HOURS`: 実行間隔（時間）

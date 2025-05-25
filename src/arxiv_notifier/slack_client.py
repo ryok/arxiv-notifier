@@ -63,19 +63,20 @@ class SlackClient:
                 logger.error(f"Response content: {e.response.text}")
             raise
 
-    def post_paper(self, paper: Paper) -> bool:
+    def post_paper(self, paper: Paper, japanese_summary: str | None = None) -> bool:
         """論文情報をSlackに投稿.
 
         Args:
             paper: 論文情報
+            japanese_summary: 日本語要約（オプション）
 
         Returns:
             投稿成功の場合True
 
         """
         try:
-            # Slack Block Kit形式のメッセージを取得
-            message = paper.to_slack_message()
+            # Slack Block Kit形式のメッセージを取得（日本語要約付き）
+            message = paper.to_slack_message(japanese_summary)
 
             # 追加の設定を適用
             payload = {

@@ -39,6 +39,8 @@ jobs:
         SLACK_ICON_EMOJI: ${{ secrets.SLACK_ICON_EMOJI }}
         NOTION_API_KEY: ${{ secrets.NOTION_API_KEY }}
         NOTION_DATABASE_ID: ${{ secrets.NOTION_DATABASE_ID }}
+        OPENAI_API_KEY: ${{ secrets.OPENAI_API_KEY }}
+        OPENAI_MODEL: ${{ secrets.OPENAI_MODEL }}
         DATABASE_URL: "sqlite:///./arxiv_papers.db"
         LOG_LEVEL: "INFO"
         LOG_FILE: "logs/arxiv_notifier.log"
