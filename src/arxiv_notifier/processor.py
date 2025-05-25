@@ -172,6 +172,9 @@ class PaperProcessor:
             if self.db_manager:
                 for paper in new_papers:
                     self.db_manager.mark_paper_as_processed(paper)
+                # 変更をコミットして、後続の処理で参照できるようにする
+                if self.db_manager.session:
+                    self.db_manager.session.commit()
 
             # 4. Slackに投稿
             if self.slack_client:

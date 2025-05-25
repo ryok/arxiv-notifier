@@ -5,7 +5,7 @@ arXiv APIを使用して論文を検索・取得する機能を提供する。
 
 import re
 import time
-from datetime import datetime, timedelta
+from datetime import UTC, datetime, timedelta
 from xml.etree import ElementTree as ET
 
 import httpx
@@ -186,7 +186,7 @@ class ArxivClient:
         # 日付フィルタ（submittedDateを使用）
         if start_date:
             date_str = start_date.strftime("%Y%m%d")
-            end_date_str = datetime.now().strftime("%Y%m%d")
+            end_date_str = datetime.now(UTC).strftime("%Y%m%d")
             query_parts.append(f"submittedDate:[{date_str} TO {end_date_str}]")
 
         # クエリが空の場合はデフォルトクエリ
@@ -249,7 +249,8 @@ class ArxivClient:
         keywords = keywords or settings.arxiv_keywords
         categories = categories or settings.arxiv_categories
 
-        start_date = datetime.now() - timedelta(days=days_back)
+        # タイムゾーン付きのdatetimeを使用
+        start_date = datetime.now(UTC) - timedelta(days=days_back)
 
         all_papers = []
         start_index = 0
