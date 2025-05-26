@@ -4,10 +4,10 @@ Notion APIを使用して論文情報をデータベースに保存する機能�
 """
 
 import time
-from typing import Any
 
-import httpx
 from loguru import logger
+from notion_client import Client
+from notion_client.errors import APIResponseError, RequestTimeoutError
 from tenacity import retry, stop_after_attempt, wait_exponential
 
 from .config import settings
@@ -16,9 +16,6 @@ from .models import Paper
 
 class NotionClient:
     """Notion連携クライアント."""
-
-    BASE_URL = "https://api.notion.com/v1"
-    API_VERSION = "2022-06-28"
 
     def __init__(
         self,
@@ -40,16 +37,13 @@ class NotionClient:
         if not self.database_id:
             raise ValueError("Notion database ID is not configured")
 
-        self.headers = {
-            "Authorization": f"Bearer {self.api_key}",
-            "Content-Type": "application/json",
-            "Notion-Version": self.API_VERSION,
-        }
-
-        self.client = httpx.Client(
-            timeout=settings.api_timeout,
-            headers=self.headers,
+        self.client = Client(
+            auth=self.api_key,
+            timeout_ms=int(settings.api_timeout * 1000),  # ミリ秒に変換
         )
+
+        # プロパティ確認済みフラグ
+        self._properties_ensured = False
 
     def __enter__(self) -> "NotionClient":
         """コンテキストマネージャー開始."""
@@ -57,51 +51,34 @@ class NotionClient:
 
     def __exit__(self, exc_type, exc_val, exc_tb) -> None:
         """コンテキストマネージャー終了."""
-        self.client.close()
+        # notion-clientは自動的にリソースを管理するため、明示的なクローズは不要
 
     @retry(
         stop=stop_after_attempt(3),
         wait=wait_exponential(multiplier=1, min=4, max=10),
     )
-    def _make_request(
-        self,
-        method: str,
-        endpoint: str,
-        json_data: dict[str, Any] | None = None,
-    ) -> dict:
-        """Notion APIリクエストを実行.
+    def _handle_api_call(self, func, *args, **kwargs) -> dict:
+        """Notion APIコールを実行してエラーハンドリングを行う.
 
         Args:
-            method: HTTPメソッド
-            endpoint: エンドポイント
-            json_data: 送信するJSONデータ
+            func: 実行する関数
+            *args: 関数の引数
+            **kwargs: 関数のキーワード引数
 
         Returns:
-            レスポンスのJSON
+            APIレスポンス
 
         Raises:
-            httpx.HTTPError: HTTPエラーが発生した場合
+            APIResponseError: API呼び出しエラーが発生した場合
 
         """
-        url = f"{self.BASE_URL}/{endpoint}"
-
         try:
-            if method == "GET":
-                response = self.client.get(url)
-            elif method == "POST":
-                response = self.client.post(url, json=json_data)
-            elif method == "PATCH":
-                response = self.client.patch(url, json=json_data)
-            else:
-                raise ValueError(f"Unsupported HTTP method: {method}")
-
-            response.raise_for_status()
-            return response.json()
-
-        except httpx.HTTPError as e:
-            logger.error(f"Notion API request failed: {e}")
-            if hasattr(e, "response") and e.response is not None:
-                logger.error(f"Response content: {e.response.text}")
+            return func(*args, **kwargs)
+        except (APIResponseError, RequestTimeoutError) as e:
+            logger.error(f"Notion API call failed: {e}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error in Notion API call: {e}")
             raise
 
     def get_database_schema(self) -> dict:
@@ -112,12 +89,71 @@ class NotionClient:
 
         """
         try:
-            result = self._make_request("GET", f"databases/{self.database_id}")
+            result = self._handle_api_call(
+                self.client.databases.retrieve, database_id=self.database_id
+            )
             logger.debug(f"Retrieved database schema: {result.get('title', 'Unknown')}")
             return result
         except Exception as e:
             logger.error(f"Failed to get database schema: {e}")
             raise
+
+    def _ensure_database_properties(self) -> bool:
+        """データベースに必要なプロパティが存在することを確認し、不足している場合は作成.
+
+        Returns:
+            プロパティの確認・作成が成功した場合True
+
+        """
+        try:
+            schema = self.get_database_schema()
+            existing_properties = schema.get("properties", {})
+
+            # 必要なプロパティの定義
+            required_properties = {
+                "Title": {"title": {}},
+                "Authors": {"rich_text": {}},
+                "Abstract": {"rich_text": {}},
+                "Japanese Summary": {"rich_text": {}},
+                "Categories": {"multi_select": {}},
+                "Published Date": {"date": {}},
+                "Updated Date": {"date": {}},
+                "arXiv ID": {"rich_text": {}},
+                "arXiv URL": {"url": {}},
+                "PDF URL": {"url": {}},
+            }
+
+            # 不足しているプロパティを特定
+            missing_properties = {}
+            for prop_name, prop_config in required_properties.items():
+                if prop_name not in existing_properties:
+                    missing_properties[prop_name] = prop_config
+                    logger.info(f"Missing property detected: {prop_name}")
+
+            # 不足しているプロパティがある場合は追加
+            if missing_properties:
+                logger.info(
+                    f"Adding {len(missing_properties)} missing properties to database"
+                )
+
+                # データベースを更新
+                update_data = {"properties": missing_properties}
+
+                self._handle_api_call(
+                    self.client.databases.update,
+                    database_id=self.database_id,
+                    **update_data,
+                )
+
+                logger.info("Successfully added missing properties to database")
+            else:
+                logger.debug("All required properties exist in database")
+
+            return True
+
+        except Exception as e:
+            logger.error(f"Failed to ensure database properties: {e}")
+            return False
 
     def add_paper(
         self, paper: Paper, japanese_summary: str | None = None
@@ -133,6 +169,13 @@ class NotionClient:
 
         """
         try:
+            # データベースプロパティの確認・作成（初回のみ）
+            if not self._properties_ensured:
+                if not self._ensure_database_properties():
+                    logger.error("Failed to ensure database properties")
+                    return None
+                self._properties_ensured = True
+
             # プロパティを構築
             properties = paper.to_notion_properties()
 
@@ -148,7 +191,7 @@ class NotionClient:
                 "properties": properties,
             }
 
-            result = self._make_request("POST", "pages", page_data)
+            result = self._handle_api_call(self.client.pages.create, **page_data)
 
             # レート制限対応（0.33秒待機 = 3リクエスト/秒）
             time.sleep(0.34)
@@ -181,10 +224,8 @@ class NotionClient:
                 "page_size": 10,
             }
 
-            result = self._make_request(
-                "POST",
-                f"databases/{self.database_id}/query",
-                search_data,
+            result = self._handle_api_call(
+                self.client.databases.query, database_id=self.database_id, **search_data
             )
 
             return result.get("results", [])
@@ -252,10 +293,11 @@ class NotionClient:
         try:
             # データベース情報を取得してテスト
             schema = self.get_database_schema()
-            logger.info(
-                f"Notion connection test successful. "
-                f"Database: {schema.get('title', [{}])[0].get('plain_text', 'Unknown')}"
-            )
+            title = "Unknown"
+            if schema.get("title"):
+                title = schema["title"][0].get("plain_text", "Unknown")
+
+            logger.info(f"Notion connection test successful. Database: {title}")
             return True
         except Exception as e:
             logger.error(f"Notion connection test failed: {e}")
@@ -276,7 +318,9 @@ class NotionClient:
             try:
                 self.get_database_schema()
                 logger.info("Database already exists")
-                return self.database_id
+                if self.database_id:
+                    return self.database_id
+                raise ValueError("Database ID is not configured")
             except Exception:
                 pass
 
@@ -299,7 +343,9 @@ class NotionClient:
                 },
             }
 
-            result = self._make_request("POST", "databases", database_data)
+            result = self._handle_api_call(
+                self.client.databases.create, **database_data
+            )
             new_database_id = result["id"]
 
             logger.info(f"Created new database: {new_database_id}")

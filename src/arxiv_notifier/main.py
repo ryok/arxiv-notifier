@@ -185,6 +185,14 @@ def config() -> None:
     else:
         click.echo("Status: Disabled (NOTION_API_KEY or NOTION_DATABASE_ID not set)")
 
+    # OpenAI設定
+    click.echo("\n[OpenAI Settings]")
+    if settings.openai_api_key:
+        click.echo("Status: Enabled")
+        click.echo(f"Model: {settings.openai_model}")
+    else:
+        click.echo("Status: Disabled (OPENAI_API_KEY not set)")
+
     # スケジュール設定
     click.echo("\n[Schedule Settings]")
     if settings.schedule_time:
@@ -235,6 +243,11 @@ SLACK_ICON_EMOJI=":robot_face:"
 NOTION_API_KEY=
 NOTION_DATABASE_ID=
 
+# OpenAI Settings (Optional)
+# Get API key from: https://platform.openai.com/api-keys
+OPENAI_API_KEY=
+OPENAI_MODEL="gpt-3.5-turbo"
+
 # Schedule Settings
 SCHEDULE_INTERVAL_HOURS=24
 SCHEDULE_TIME="09:00"
@@ -258,6 +271,97 @@ API_RETRY_DELAY=5
     output.write_text(env_content)
     click.echo(f"Generated environment file: {output}")
     click.echo("Please edit this file and rename it to .env")
+
+
+@cli.group()
+def db() -> None:
+    """データベース管理コマンド."""
+
+
+@db.command()
+def reset() -> None:
+    """データベースをリセット（全データ削除）."""
+    from .database import DatabaseManager
+
+    click.confirm("本当にデータベースをリセットしますか？", abort=True)
+
+    # データベースファイルを削除
+    db_path = Path(settings.database_url.replace("sqlite:///", ""))
+    if db_path.exists():
+        db_path.unlink()
+        logger.info(f"Database file deleted: {db_path}")
+
+    # 新しいデータベースを作成
+    with DatabaseManager() as db_manager:
+        logger.info("New database created")
+        stats = db_manager.get_statistics()
+        logger.info(f"Database reset complete. Total papers: {stats['total_papers']}")
+
+
+@db.command()
+def stats() -> None:
+    """データベースの統計情報を表示."""
+    from .database import DatabaseManager
+
+    with DatabaseManager() as db_manager:
+        stats = db_manager.get_statistics()
+
+        click.echo("\n[Database Statistics]")
+        click.echo(f"Total papers: {stats['total_papers']}")
+        click.echo(f"Papers posted to Slack: {stats['slack_posted']}")
+        click.echo(f"Papers added to Notion: {stats['notion_added']}")
+
+        if stats["recent_papers"]:
+            click.echo("\n[Recent Papers (Last 5)]")
+            for paper in stats["recent_papers"][:5]:
+                click.echo(f"- {paper.arxiv_id}: {paper.title[:60]}...")
+                click.echo(
+                    f"  Processed: {paper.processed_at.strftime('%Y-%m-%d %H:%M')}"
+                )
+
+
+@db.command()
+@click.option(
+    "--days",
+    "-d",
+    type=int,
+    help="何日前のデータを削除するか（デフォルトは設定値）",
+)
+def cleanup(days: int | None) -> None:
+    """古いデータをクリーンアップ."""
+    from .database import DatabaseManager
+
+    cleanup_days = days or settings.database_cleanup_days
+
+    with DatabaseManager() as db_manager:
+        deleted = db_manager.cleanup_old_records(cleanup_days)
+        logger.info(
+            f"Cleaned up {deleted} old records (older than {cleanup_days} days)"
+        )
+
+
+@db.command()
+@click.argument("arxiv_id")
+def remove(arxiv_id: str) -> None:
+    """特定の論文をデータベースから削除."""
+    from .database import DatabaseManager
+
+    with DatabaseManager() as db_manager:
+        # 論文を検索
+        from .models import ProcessedPaper
+
+        paper = (
+            db_manager.session.query(ProcessedPaper)
+            .filter_by(arxiv_id=arxiv_id)
+            .first()
+        )
+
+        if paper:
+            db_manager.session.delete(paper)
+            db_manager.session.commit()
+            logger.info(f"Removed paper: {arxiv_id}")
+        else:
+            logger.error(f"Paper not found: {arxiv_id}")
 
 
 def main() -> None:

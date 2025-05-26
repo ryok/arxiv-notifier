@@ -26,6 +26,10 @@ class Settings(BaseSettings):
         default=["machine learning", "deep learning"],
         description="検索キーワードリスト",
     )
+    arxiv_keyword_operator: str = Field(
+        default="OR",
+        description="キーワード間の論理演算子（AND/OR）",
+    )
     arxiv_categories: str | list[str] = Field(
         default=["cs.LG", "cs.AI", "stat.ML"],
         description="検索カテゴリリスト",
@@ -136,6 +140,15 @@ class Settings(BaseSettings):
         if isinstance(v, str):
             return [item.strip() for item in v.split(",") if item.strip()]
         return v
+
+    @field_validator("arxiv_keyword_operator")
+    @classmethod
+    def validate_keyword_operator(cls, v: str) -> str:
+        """キーワード演算子の検証."""
+        v_upper = v.upper()
+        if v_upper not in ["AND", "OR"]:
+            raise ValueError(f"Invalid keyword operator: {v}. Must be 'AND' or 'OR'")
+        return v_upper
 
     @field_validator("log_level")
     @classmethod

@@ -56,7 +56,7 @@ graph TB
    - スレッド形式での連続投稿対応
 
 3. **Notion連携機能**
-   - Notion APIを使用したデータベース操作
+   - notion-sdk-pyライブラリを使用したデータベース操作
    - 論文情報の構造化保存
    - タグ付けとカテゴリ分類
 
@@ -196,4 +196,5 @@ class ProcessedPaper:
   - schedule: スケジューリング
   - python-dotenv: 環境変数管理
   - loguru: ログ管理
+  - notion-client: Notion API公式クライアント
   - pytest: テストフレームワーク

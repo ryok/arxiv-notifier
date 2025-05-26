@@ -30,6 +30,7 @@ jobs:
     - name: Run arXiv Notifier
       env:
         ARXIV_KEYWORDS: ${{ secrets.ARXIV_KEYWORDS }}
+        ARXIV_KEYWORD_OPERATOR: ${{ secrets.ARXIV_KEYWORD_OPERATOR }}
         ARXIV_CATEGORIES: ${{ secrets.ARXIV_CATEGORIES }}
         ARXIV_MAX_RESULTS: ${{ secrets.ARXIV_MAX_RESULTS }}
         ARXIV_DAYS_BACK: ${{ secrets.ARXIV_DAYS_BACK }}
@@ -51,7 +52,7 @@ jobs:
       
     - name: Upload logs
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: arxiv-notifier-logs
         path: logs/
@@ -59,7 +60,7 @@ jobs:
         
     - name: Upload database
       if: always()
-      uses: actions/upload-artifact@v3
+      uses: actions/upload-artifact@v4
       with:
         name: arxiv-papers-db
         path: arxiv_papers.db

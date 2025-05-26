@@ -10,12 +10,19 @@ from src.arxiv_notifier.config import Settings
 class TestSettings:
     """設定クラスのテスト."""
 
-    def test_default_settings(self) -> None:
+    def test_default_settings(self, monkeypatch) -> None:
         """デフォルト設定のテスト."""
+        # 環境変数をクリア
+        monkeypatch.delenv("ARXIV_KEYWORDS", raising=False)
+        monkeypatch.delenv("SLACK_WEBHOOK_URL", raising=False)
+        monkeypatch.delenv("NOTION_API_KEY", raising=False)
+        monkeypatch.delenv("NOTION_DATABASE_ID", raising=False)
+
         settings = Settings()
 
         # arXiv設定
         assert settings.arxiv_keywords == ["machine learning", "deep learning"]
+        assert settings.arxiv_keyword_operator == "OR"
         assert settings.arxiv_categories == ["cs.LG", "cs.AI", "stat.ML"]
         assert settings.arxiv_max_results == 50
         assert settings.arxiv_days_back == 7
@@ -54,6 +61,19 @@ class TestSettings:
         settings = Settings(arxiv_keywords=["test1", "test2"])
         assert settings.arxiv_keywords == ["test1", "test2"]
 
+    def test_keyword_operator_validator(self) -> None:
+        """キーワード演算子バリデータのテスト."""
+        # 小文字でも大文字に変換される
+        settings = Settings(arxiv_keyword_operator="and")
+        assert settings.arxiv_keyword_operator == "AND"
+
+        settings = Settings(arxiv_keyword_operator="or")
+        assert settings.arxiv_keyword_operator == "OR"
+
+        # 無効な演算子
+        with pytest.raises(ValueError, match="Invalid keyword operator"):
+            Settings(arxiv_keyword_operator="INVALID")
+
     def test_log_level_validator(self) -> None:
         """ログレベルバリデータのテスト."""
         # 小文字でも大文字に変換される
@@ -87,7 +107,7 @@ class TestSettings:
     def test_is_slack_enabled(self) -> None:
         """Slack有効判定のテスト."""
         # Webhook URLなし
-        settings = Settings()
+        settings = Settings(slack_webhook_url=None)
         assert settings.is_slack_enabled() is False
 
         # Webhook URLあり
@@ -97,15 +117,15 @@ class TestSettings:
     def test_is_notion_enabled(self) -> None:
         """Notion有効判定のテスト."""
         # 両方なし
-        settings = Settings()
+        settings = Settings(notion_api_key=None, notion_database_id=None)
         assert settings.is_notion_enabled() is False
 
         # API keyのみ
-        settings = Settings(notion_api_key="secret_key")
+        settings = Settings(notion_api_key="secret_key", notion_database_id=None)
         assert settings.is_notion_enabled() is False
 
         # Database IDのみ
-        settings = Settings(notion_database_id="db_id")
+        settings = Settings(notion_api_key=None, notion_database_id="db_id")
         assert settings.is_notion_enabled() is False
 
         # 両方あり
