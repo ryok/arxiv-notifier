@@ -59,6 +59,52 @@ class ArxivClient:
         response.raise_for_status()
         return response.text
 
+    def _parse_keyword_query(self, keywords: list[str], operator: str = "OR") -> str:
+        """キーワードクエリを構築.
+
+        Args:
+            keywords: 検索キーワードリスト
+            operator: キーワード間の論理演算子（AND/OR）
+
+        Returns:
+            構築されたクエリ文字列
+
+        """
+        if not keywords:
+            return ""
+
+        # 単一のキーワードが複雑な論理式を含む場合の処理
+        if len(keywords) == 1 and any(
+            op in keywords[0].upper() for op in [" AND ", " OR ", "(", ")"]
+        ):
+            # 複雑な論理式として扱う
+            complex_query = keywords[0]
+            # キーワードを all: フィールドでラップ
+            # 簡単な置換でall:フィールドを追加
+            import re
+
+            # 引用符で囲まれていない単語をall:"word"に変換
+            def replace_word(match):
+                word = match.group(0)
+                if word.upper() in ["AND", "OR"]:
+                    return word.upper()
+                if word in ["(", ")"]:
+                    return word
+                return f'all:"{word}"'
+
+            # 単語を抽出して置換
+            pattern = r"\b\w+\b|[()]"
+            processed_query = re.sub(pattern, replace_word, complex_query)
+            return f"({processed_query})"
+        # 通常のキーワードリストとして処理
+        keyword_parts = [f'all:"{kw.strip()}"' for kw in keywords if kw.strip()]
+        if not keyword_parts:
+            return ""
+
+        if operator.upper() == "AND":
+            return f"({' AND '.join(keyword_parts)})"
+        return f"({' OR '.join(keyword_parts)})"
+
     def _parse_paper(self, entry: ET.Element) -> Paper | None:
         """XMLエントリから論文情報をパース.
 
@@ -175,8 +221,11 @@ class ArxivClient:
 
         # キーワード検索
         if keywords:
-            keyword_query = " OR ".join([f'all:"{kw}"' for kw in keywords])
-            query_parts.append(f"({keyword_query})")
+            keyword_query = self._parse_keyword_query(
+                keywords, settings.arxiv_keyword_operator
+            )
+            if keyword_query:
+                query_parts.append(keyword_query)
 
         # カテゴリ検索
         if categories:
@@ -246,8 +295,23 @@ class ArxivClient:
 
         """
         days_back = days_back or settings.arxiv_days_back
-        keywords = keywords or settings.arxiv_keywords
-        categories = categories or settings.arxiv_categories
+        # 設定値がstr | list[str]なので、list[str]に変換
+        if keywords is None:
+            raw_keywords = settings.arxiv_keywords
+            if isinstance(raw_keywords, str):
+                keywords = [
+                    item.strip() for item in raw_keywords.split(",") if item.strip()
+                ]
+            else:
+                keywords = raw_keywords
+        if categories is None:
+            raw_categories = settings.arxiv_categories
+            if isinstance(raw_categories, str):
+                categories = [
+                    item.strip() for item in raw_categories.split(",") if item.strip()
+                ]
+            else:
+                categories = raw_categories
 
         # タイムゾーン付きのdatetimeを使用
         start_date = datetime.now(UTC) - timedelta(days=days_back)

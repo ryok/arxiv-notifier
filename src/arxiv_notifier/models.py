@@ -57,45 +57,68 @@ class Paper(BaseModel):
         """
         return self.categories[0] if self.categories else "Unknown"
 
-    def to_slack_message(self) -> dict:
+    def to_slack_message(self, japanese_summary: str | None = None) -> dict:
         """Slack投稿用メッセージフォーマットに変換.
+
+        Args:
+            japanese_summary: 日本語要約（オプション）
 
         Returns:
             Slack Block Kit形式のメッセージ
 
         """
-        return {
-            "blocks": [
-                {
-                    "type": "header",
-                    "text": {
-                        "type": "plain_text",
-                        "text": f"📄 {self.title}",
-                        "emoji": True,
+        blocks = [
+            {
+                "type": "header",
+                "text": {
+                    "type": "plain_text",
+                    "text": f"📄 {self.title}",
+                    "emoji": True,
+                },
+            },
+            {
+                "type": "section",
+                "fields": [
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*Authors:*\n{self.get_formatted_authors()}",
                     },
-                },
-                {
-                    "type": "section",
-                    "fields": [
-                        {
-                            "type": "mrkdwn",
-                            "text": f"*Authors:*\n{self.get_formatted_authors()}",
-                        },
-                        {
-                            "type": "mrkdwn",
-                            "text": f"*Category:*\n{self.get_primary_category()}",
-                        },
-                    ],
-                },
+                    {
+                        "type": "mrkdwn",
+                        "text": f"*Category:*\n{self.get_primary_category()}",
+                    },
+                ],
+            },
+        ]
+
+        # 日本語要約がある場合は追加
+        if japanese_summary:
+            blocks.append(
                 {
                     "type": "section",
                     "text": {
                         "type": "mrkdwn",
-                        "text": f"*Abstract:*\n{self.abstract[:500]}..."
-                        if len(self.abstract) > 500
-                        else f"*Abstract:*\n{self.abstract}",
+                        "text": f"*日本語要約:*\n{japanese_summary}",
                     },
+                }
+            )
+
+        # 英語要約を追加
+        blocks.append(
+            {
+                "type": "section",
+                "text": {
+                    "type": "mrkdwn",
+                    "text": f"*Abstract:*\n{self.abstract[:500]}..."
+                    if len(self.abstract) > 500
+                    else f"*Abstract:*\n{self.abstract}",
                 },
+            }
+        )
+
+        # メタ情報とアクションボタン
+        blocks.extend(
+            [
                 {
                     "type": "section",
                     "fields": [
@@ -135,7 +158,9 @@ class Paper(BaseModel):
                 },
                 {"type": "divider"},
             ]
-        }
+        )
+
+        return {"blocks": blocks}
 
     def to_notion_properties(self) -> dict:
         """Notion データベースプロパティ形式に変換.

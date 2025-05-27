@@ -13,6 +13,7 @@ from .database import DatabaseManager
 from .models import Paper
 from .notion_client import NotionClient
 from .slack_client import SlackClient
+from .summarizer import get_summarizer
 
 
 class PaperProcessor:
@@ -24,6 +25,7 @@ class PaperProcessor:
         self.slack_client: SlackClient | None = None
         self.notion_client: NotionClient | None = None
         self.db_manager: DatabaseManager | None = None
+        self.summarizer = get_summarizer()
 
     def __enter__(self) -> "PaperProcessor":
         """コンテキストマネージャー開始."""
@@ -101,8 +103,38 @@ class PaperProcessor:
         # サマリーを投稿
         self.slack_client.post_summary(papers)
 
-        # 個別論文を投稿
-        results = self.slack_client.post_papers_batch(papers, max_papers=10)
+        # 投稿する論文を制限
+        papers_to_post = papers[:10]  # 最大10件
+
+        if len(papers) > 10:
+            logger.warning(f"Limiting posts to 10 papers out of {len(papers)}")
+
+        # 個別論文を投稿（日本語要約付き）
+        results = {"success": [], "failed": []}
+
+        for paper in papers_to_post:
+            # 日本語要約を生成
+            japanese_summary = None
+            if self.summarizer.is_enabled():
+                try:
+                    japanese_summary = self.summarizer.generate_summary(paper)
+                    if japanese_summary:
+                        logger.debug(f"Generated Japanese summary for paper {paper.id}")
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to generate summary for paper {paper.id}: {e}"
+                    )
+
+            # Slackに投稿
+            if self.slack_client.post_paper(paper, japanese_summary):
+                results["success"].append(paper)
+            else:
+                results["failed"].append(paper)
+
+        logger.info(
+            f"Batch posting completed: "
+            f"{len(results['success'])} success, {len(results['failed'])} failed"
+        )
 
         # 成功した論文をデータベースに記録
         if self.db_manager:
@@ -126,7 +158,31 @@ class PaperProcessor:
             return {"success": [], "failed": [], "skipped": []}
 
         logger.info(f"Adding {len(papers)} papers to Notion...")
-        results = self.notion_client.add_papers_batch(papers)
+
+        # 日本語要約を含むプロパティで論文を追加
+        results = {"success": [], "failed": [], "skipped": []}
+
+        for paper in papers:
+            try:
+                # 日本語要約を生成
+                japanese_summary = None
+                if self.summarizer.is_enabled():
+                    try:
+                        japanese_summary = self.summarizer.generate_summary(paper)
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to generate summary for paper {paper.id}: {e}"
+                        )
+
+                # Notionに追加（要約がある場合は含める）
+                if self.notion_client.add_paper(paper, japanese_summary):
+                    results["success"].append(paper)
+                else:
+                    results["failed"].append(paper)
+
+            except Exception as e:
+                logger.error(f"Error adding paper {paper.id} to Notion: {e}")
+                results["failed"].append(paper)
 
         # 成功した論文をデータベースに記録
         if self.db_manager:
@@ -234,6 +290,7 @@ class PaperProcessor:
             "database": False,
             "slack": False,
             "notion": False,
+            "openai": False,
         }
 
         # arXiv接続テスト
@@ -277,5 +334,30 @@ class PaperProcessor:
                 )
         except Exception as e:
             logger.error(f"Notion connection test failed: {e}")
+
+        # OpenAI接続テスト
+        try:
+            if self.summarizer.is_enabled():
+                # 簡単なテスト論文で要約生成を試す
+                test_paper = Paper(
+                    id="test123",
+                    title="Test Paper",
+                    authors=["Test Author"],
+                    abstract="This is a test abstract for connection testing.",
+                    categories=["cs.LG"],
+                    published_date=datetime.now(),
+                    updated_date=datetime.now(),
+                    pdf_url="https://example.com/test.pdf",
+                    arxiv_url="https://arxiv.org/abs/test123",
+                )
+                summary = self.summarizer.generate_summary(test_paper)
+                results["openai"] = summary is not None
+                logger.info(
+                    f"OpenAI connection test: {'OK' if results['openai'] else 'Failed'}"
+                )
+            else:
+                logger.info("OpenAI connection test: Skipped (not configured)")
+        except Exception as e:
+            logger.error(f"OpenAI connection test failed: {e}")
 
         return results

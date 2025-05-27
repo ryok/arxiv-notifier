@@ -28,6 +28,8 @@ dependencies = [
     "lxml>=5.0.0",
     "tenacity>=8.2.0",
     "click>=8.1.0",
+    "openai>=1.0.0",
+    "notion-client>=2.2.1",
 ]
 
 [project.optional-dependencies]
@@ -65,7 +67,7 @@ disallow_incomplete_defs = true
 plugins = ["pydantic.mypy"]
 
 [[tool.mypy.overrides]]
-module = ["schedule", "loguru"]
+module = ["schedule", "loguru", "notion_client", "notion_client.errors"]
 ignore_missing_imports = true
 
 [tool.pytest.ini_options]
@@ -83,6 +85,12 @@ ignore = ["S101"]  # assert文の使用を許可（テストで使用）
 [build-system]
 requires = ["hatchling"]
 build-backend = "hatchling.build"
+
+[dependency-groups]
+dev = [
+    "pytest>=8.3.5",
+    "pytest-cov>=5.0.0",
+]
 
 [tool.hatch.build.targets.wheel]
 packages = ["src/arxiv_notifier"]
