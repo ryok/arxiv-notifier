@@ -212,6 +212,23 @@ def config() -> None:
     click.echo(f"Rotation: {settings.log_rotation}")
     click.echo(f"Retention: {settings.log_retention}")
 
+    # プロジェクト関連性評価設定
+    click.echo("\n[Project Relevance Settings]")
+    if settings.is_project_relevance_enabled():
+        click.echo("Status: Enabled")
+        click.echo(f"Project overview file: {settings.project_overview_file}")
+    else:
+        if not settings.enable_project_relevance:
+            click.echo("Status: Disabled (ENABLE_PROJECT_RELEVANCE=false)")
+        elif not settings.project_overview_file:
+            click.echo("Status: Disabled (PROJECT_OVERVIEW_FILE not set)")
+        elif not settings.project_overview_file.exists():
+            click.echo(f"Status: Disabled (Project overview file not found: {settings.project_overview_file})")
+        elif not settings.openai_api_key:
+            click.echo("Status: Disabled (OPENAI_API_KEY not set)")
+        else:
+            click.echo("Status: Disabled")
+
 
 @cli.command()
 @click.option(
@@ -247,6 +264,12 @@ NOTION_DATABASE_ID=
 # Get API key from: https://platform.openai.com/api-keys
 OPENAI_API_KEY=
 OPENAI_MODEL="gpt-3.5-turbo"
+
+# Project Relevance Settings (Optional)
+# プロジェクト概要ファイルへのパス（マークダウン形式）
+PROJECT_OVERVIEW_FILE=
+# プロジェクト関連性評価機能を有効にするか
+ENABLE_PROJECT_RELEVANCE=false
 
 # Schedule Settings
 SCHEDULE_INTERVAL_HOURS=24

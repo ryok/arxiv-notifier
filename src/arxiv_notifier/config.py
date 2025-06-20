@@ -133,6 +133,16 @@ class Settings(BaseSettings):
         description="使用するOpenAIモデル",
     )
 
+    # プロジェクト概要設定
+    project_overview_file: Path | None = Field(
+        default=None,
+        description="プロジェクト概要マークダウンファイルのパス",
+    )
+    enable_project_relevance: bool = Field(
+        default=False,
+        description="プロジェクト関連性評価機能を有効にするか",
+    )
+
     @field_validator("arxiv_keywords", "arxiv_categories", mode="after")
     @classmethod
     def ensure_list(cls, v: str | list[str]) -> list[str]:
@@ -185,6 +195,15 @@ class Settings(BaseSettings):
     def is_notion_enabled(self) -> bool:
         """Notion連携が有効かどうか."""
         return bool(self.notion_api_key and self.notion_database_id)
+
+    def is_project_relevance_enabled(self) -> bool:
+        """プロジェクト関連性評価が有効かどうか."""
+        return (
+            self.enable_project_relevance
+            and self.project_overview_file is not None
+            and self.project_overview_file.exists()
+            and bool(self.openai_api_key)
+        )
 
 
 # グローバル設定インスタンス

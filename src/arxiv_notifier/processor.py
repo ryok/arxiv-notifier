@@ -12,6 +12,7 @@ from .config import settings
 from .database import DatabaseManager
 from .models import Paper
 from .notion_client import NotionClient
+from .project_relevance import get_evaluator
 from .slack_client import SlackClient
 from .summarizer import get_summarizer
 
@@ -26,6 +27,7 @@ class PaperProcessor:
         self.notion_client: NotionClient | None = None
         self.db_manager: DatabaseManager | None = None
         self.summarizer = get_summarizer()
+        self.relevance_evaluator = get_evaluator()
 
     def __enter__(self) -> "PaperProcessor":
         """コンテキストマネージャー開始."""
@@ -125,8 +127,23 @@ class PaperProcessor:
                         f"Failed to generate summary for paper {paper.id}: {e}"
                     )
 
+            # プロジェクト関連性を評価
+            project_relevance = None
+            if self.relevance_evaluator and self.relevance_evaluator.is_enabled():
+                try:
+                    import asyncio
+                    project_relevance = asyncio.run(
+                        self.relevance_evaluator.evaluate_relevance(paper)
+                    )
+                    if project_relevance:
+                        logger.debug(f"Generated project relevance for paper {paper.id}")
+                except Exception as e:
+                    logger.warning(
+                        f"Failed to evaluate project relevance for paper {paper.id}: {e}"
+                    )
+
             # Slackに投稿
-            if self.slack_client.post_paper(paper, japanese_summary):
+            if self.slack_client.post_paper(paper, japanese_summary, project_relevance):
                 results["success"].append(paper)
             else:
                 results["failed"].append(paper)
@@ -136,10 +153,24 @@ class PaperProcessor:
             f"{len(results['success'])} success, {len(results['failed'])} failed"
         )
 
-        # 成功した論文をデータベースに記録
+        # 成功した論文をデータベースに記録（関連性コメント含む）
         if self.db_manager:
-            for paper in results["success"]:
-                self.db_manager.update_paper_status(paper.id, slack_posted=True)
+            for i, paper in enumerate(results["success"]):
+                # 対応する関連性コメントを取得
+                project_relevance = None
+                if i < len(papers_to_post) and self.relevance_evaluator and self.relevance_evaluator.is_enabled():
+                    try:
+                        import asyncio
+                        project_relevance = asyncio.run(
+                            self.relevance_evaluator.evaluate_relevance(paper)
+                        )
+                    except Exception:
+                        pass
+                self.db_manager.update_paper_status(
+                    paper.id, 
+                    slack_posted=True, 
+                    project_relevance_comment=project_relevance
+                )
 
         return results
 
@@ -174,8 +205,21 @@ class PaperProcessor:
                             f"Failed to generate summary for paper {paper.id}: {e}"
                         )
 
-                # Notionに追加（要約がある場合は含める）
-                if self.notion_client.add_paper(paper, japanese_summary):
+                # プロジェクト関連性を評価
+                project_relevance = None
+                if self.relevance_evaluator and self.relevance_evaluator.is_enabled():
+                    try:
+                        import asyncio
+                        project_relevance = asyncio.run(
+                            self.relevance_evaluator.evaluate_relevance(paper)
+                        )
+                    except Exception as e:
+                        logger.warning(
+                            f"Failed to evaluate project relevance for paper {paper.id}: {e}"
+                        )
+
+                # Notionに追加（要約・関連性コメントを含める）
+                if self.notion_client.add_paper(paper, japanese_summary, project_relevance):
                     results["success"].append(paper)
                 else:
                     results["failed"].append(paper)
@@ -359,5 +403,30 @@ class PaperProcessor:
                 logger.info("OpenAI connection test: Skipped (not configured)")
         except Exception as e:
             logger.error(f"OpenAI connection test failed: {e}")
+
+        # プロジェクト関連性評価テスト
+        results["project_relevance"] = False
+        try:
+            if self.relevance_evaluator and self.relevance_evaluator.is_enabled():
+                # 簡単なテスト論文で関連性評価を試す
+                test_paper = Paper(
+                    id="test123",
+                    title="Test Paper",
+                    authors=["Test Author"],
+                    abstract="This is a test abstract for connection testing.",
+                    categories=["cs.LG"],
+                    published_date=datetime.now(),
+                    updated_date=datetime.now(),
+                    pdf_url="https://example.com/test.pdf",
+                    arxiv_url="https://arxiv.org/abs/test123",
+                )
+                import asyncio
+                relevance = asyncio.run(self.relevance_evaluator.evaluate_relevance(test_paper))
+                results["project_relevance"] = True  # 例外が発生しなければ成功
+                logger.info("Project relevance evaluation test: OK")
+            else:
+                logger.info("Project relevance evaluation test: Skipped (not configured)")
+        except Exception as e:
+            logger.error(f"Project relevance evaluation test failed: {e}")
 
         return results

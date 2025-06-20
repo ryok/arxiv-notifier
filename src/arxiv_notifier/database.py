@@ -106,6 +106,7 @@ class DatabaseManager:
         arxiv_id: str,
         slack_posted: bool | None = None,
         notion_added: bool | None = None,
+        project_relevance_comment: str | None = None,
     ) -> bool:
         """論文の処理ステータスを更新.
 
@@ -113,6 +114,7 @@ class DatabaseManager:
             arxiv_id: arXiv ID
             slack_posted: Slack投稿済みフラグ（Noneの場合は更新しない）
             notion_added: Notion追加済みフラグ（Noneの場合は更新しない）
+            project_relevance_comment: プロジェクト関連性コメント（Noneの場合は更新しない）
 
         Returns:
             更新成功の場合True
@@ -135,6 +137,8 @@ class DatabaseManager:
             paper.slack_posted = slack_posted
         if notion_added is not None:
             paper.notion_added = notion_added
+        if project_relevance_comment is not None:
+            paper.project_relevance_comment = project_relevance_comment
 
         paper.processed_at = datetime.utcnow()
         logger.debug(f"Updated status for paper {arxiv_id}")
