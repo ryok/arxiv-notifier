@@ -115,6 +115,7 @@ class NotionClient:
                 "Authors": {"rich_text": {}},
                 "Abstract": {"rich_text": {}},
                 "Japanese Summary": {"rich_text": {}},
+                "Project Relevance": {"rich_text": {}},
                 "Categories": {"multi_select": {}},
                 "Published Date": {"date": {}},
                 "Updated Date": {"date": {}},
@@ -156,13 +157,17 @@ class NotionClient:
             return False
 
     def add_paper(
-        self, paper: Paper, japanese_summary: str | None = None
+        self, 
+        paper: Paper, 
+        japanese_summary: str | None = None,
+        project_relevance_comment: str | None = None
     ) -> dict | None:
         """論文をNotionデータベースに追加.
 
         Args:
             paper: 論文情報
             japanese_summary: 日本語要約（オプション）
+            project_relevance_comment: プロジェクト関連性コメント（オプション）
 
         Returns:
             作成されたページ情報、失敗時はNone
@@ -177,7 +182,7 @@ class NotionClient:
                 self._properties_ensured = True
 
             # プロパティを構築
-            properties = paper.to_notion_properties()
+            properties = paper.to_notion_properties(project_relevance_comment)
 
             # 日本語要約がある場合は追加
             if japanese_summary:

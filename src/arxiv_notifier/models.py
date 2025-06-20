@@ -57,11 +57,16 @@ class Paper(BaseModel):
         """
         return self.categories[0] if self.categories else "Unknown"
 
-    def to_slack_message(self, japanese_summary: str | None = None) -> dict:
+    def to_slack_message(
+        self, 
+        japanese_summary: str | None = None,
+        project_relevance_comment: str | None = None
+    ) -> dict:
         """Slack投稿用メッセージフォーマットに変換.
 
         Args:
             japanese_summary: 日本語要約（オプション）
+            project_relevance_comment: プロジェクト関連性コメント（オプション）
 
         Returns:
             Slack Block Kit形式のメッセージ
@@ -99,6 +104,18 @@ class Paper(BaseModel):
                     "text": {
                         "type": "mrkdwn",
                         "text": f"*日本語要約:*\n{japanese_summary}",
+                    },
+                }
+            )
+
+        # プロジェクト関連性コメントがある場合は追加
+        if project_relevance_comment:
+            blocks.append(
+                {
+                    "type": "section",
+                    "text": {
+                        "type": "mrkdwn",
+                        "text": f"*🎯 プロジェクトへの応用:*\n{project_relevance_comment}",
                     },
                 }
             )
@@ -162,14 +179,17 @@ class Paper(BaseModel):
 
         return {"blocks": blocks}
 
-    def to_notion_properties(self) -> dict:
+    def to_notion_properties(self, project_relevance_comment: str | None = None) -> dict:
         """Notion データベースプロパティ形式に変換.
+
+        Args:
+            project_relevance_comment: プロジェクト関連性コメント（オプション）
 
         Returns:
             Notion API用のプロパティ辞書
 
         """
-        return {
+        properties = {
             "Title": {"title": [{"text": {"content": self.title}}]},
             "Authors": {
                 "rich_text": [{"text": {"content": self.get_formatted_authors(10)}}]
@@ -184,6 +204,14 @@ class Paper(BaseModel):
             "arXiv URL": {"url": str(self.arxiv_url)},
             "PDF URL": {"url": str(self.pdf_url)},
         }
+        
+        # プロジェクト関連性コメントがある場合は追加
+        if project_relevance_comment:
+            properties["Project Relevance"] = {
+                "rich_text": [{"text": {"content": project_relevance_comment}}]
+            }
+        
+        return properties
 
 
 class ProcessedPaper(Base):
@@ -197,6 +225,7 @@ class ProcessedPaper(Base):
     notion_added = Column(Boolean, default=False)
     title = Column(String)
     published_date = Column(DateTime)
+    project_relevance_comment = Column(String, nullable=True)
 
     def __repr__(self) -> str:
         """文字列表現."""
