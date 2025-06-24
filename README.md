@@ -362,6 +362,24 @@ uv run mypy src/
    - キーワードやカテゴリの指定が正しいか確認
    - ログファイルでエラーを確認
 
+### データベースマイグレーションエラー
+
+`no such column: processed_papers.project_relevance_comment` というエラーが発生する場合、データベースの移行が必要です。
+
+```bash
+# データベースを移行（推奨）
+uv run arxiv-notifier db migrate
+
+# または独立したスクリプトを使用
+uv run python scripts/migrate_database.py
+```
+
+**マイグレーションについて:**
+- 自動的に複数の場所からデータベースファイルを検索
+- `project_relevance_comment` カラムを追加
+- 既にカラムが存在する場合はスキップ
+- 複数回実行しても安全
+
 ### ログの確認
 
 ```bash

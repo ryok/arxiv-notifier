@@ -26,6 +26,8 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 - `uv run arxiv-notifier db stats` - Show database statistics
 - `uv run arxiv-notifier db cleanup` - Clean up old records
 - `uv run arxiv-notifier db reset` - Reset database (destructive)
+- `uv run arxiv-notifier db migrate` - Migrate database schema (adds missing columns)
+- `uv run python scripts/migrate_database.py` - Alternative migration script
 
 ## Architecture Overview
 
@@ -85,6 +87,34 @@ New feature that analyzes how papers can be applied to specific projects:
 - Comments appear in both Slack notifications and Notion database entries
 - Only papers with high relevance get comments; low-relevance papers are skipped
 - Set `ENABLE_PROJECT_RELEVANCE=true` and `PROJECT_OVERVIEW_FILE=path/to/overview.md`
+
+## Database Migration
+
+### When Migration is Needed
+If you encounter errors like `no such column: processed_papers.project_relevance_comment`, you need to migrate the database schema.
+
+### Migration Methods
+1. **Using CLI command (recommended)**:
+   ```bash
+   uv run arxiv-notifier db migrate
+   ```
+
+2. **Using standalone script**:
+   ```bash
+   uv run python scripts/migrate_database.py
+   ```
+
+### What the Migration Does
+- Automatically detects existing database files in common locations
+- Adds the `project_relevance_comment` column to the `processed_papers` table
+- Skips migration if column already exists
+- Safe to run multiple times
+
+### Database Locations
+The migration script checks these locations:
+- `./arxiv_papers.db` (current directory)
+- `~/.arxiv_notifier/arxiv_notifier.db` (user home)
+- `data/arxiv_papers.db` (data directory)
 
 ## Development Notes
 
