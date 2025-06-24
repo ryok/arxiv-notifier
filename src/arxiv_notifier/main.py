@@ -364,6 +364,71 @@ def cleanup(days: int | None) -> None:
 
 
 @db.command()
+def migrate() -> None:
+    """データベースをマイグレート."""
+    import sqlite3
+    from pathlib import Path
+
+    def find_database_file():
+        """Find the database file in common locations."""
+        possible_paths = [
+            Path("./arxiv_papers.db"),  # Current directory
+            Path.home() / ".arxiv_notifier" / "arxiv_notifier.db",  # User home
+            Path("data/arxiv_papers.db"),  # Data directory
+        ]
+        
+        for path in possible_paths:
+            if path.exists():
+                return path
+        
+        return None
+
+    db_path = find_database_file()
+    
+    if not db_path:
+        logger.warning("No database file found. The database will be created with the correct schema on first run.")
+        return
+    
+    logger.info(f"Found database at: {db_path}")
+    
+    try:
+        conn = sqlite3.connect(db_path)
+        cursor = conn.cursor()
+        
+        # Check if processed_papers table exists
+        cursor.execute("""
+            SELECT name FROM sqlite_master 
+            WHERE type='table' AND name='processed_papers'
+        """)
+        
+        if not cursor.fetchone():
+            logger.info("processed_papers table does not exist. No migration needed.")
+            conn.close()
+            return
+        
+        # Check if column already exists
+        cursor.execute("PRAGMA table_info(processed_papers)")
+        columns = [col[1] for col in cursor.fetchall()]
+        
+        if "project_relevance_comment" not in columns:
+            logger.info("Adding project_relevance_comment column...")
+            cursor.execute("""
+                ALTER TABLE processed_papers 
+                ADD COLUMN project_relevance_comment TEXT
+            """)
+            conn.commit()
+            logger.success("Migration completed successfully!")
+        else:
+            logger.info("Column already exists. No migration needed.")
+        
+        conn.close()
+        
+    except Exception as e:
+        logger.error(f"Migration failed: {e}")
+        raise
+
+
+@db.command()
 @click.argument("arxiv_id")
 def remove(arxiv_id: str) -> None:
     """特定の論文をデータベースから削除."""
