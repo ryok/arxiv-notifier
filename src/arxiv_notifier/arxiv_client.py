@@ -19,7 +19,7 @@ from .models import Paper
 class ArxivClient:
     """arXiv APIクライアント."""
 
-    BASE_URL = "http://export.arxiv.org/api/query"
+    BASE_URL = "https://export.arxiv.org/api/query"
     NAMESPACE = {
         "atom": "http://www.w3.org/2005/Atom",
         "arxiv": "http://arxiv.org/schemas/atom",
@@ -27,7 +27,10 @@ class ArxivClient:
 
     def __init__(self) -> None:
         """初期化."""
-        self.client = httpx.Client(timeout=settings.api_timeout)
+        self.client = httpx.Client(
+            timeout=settings.api_timeout,
+            follow_redirects=True
+        )
 
     def __enter__(self) -> "ArxivClient":
         """コンテキストマネージャー開始."""
@@ -55,9 +58,17 @@ class ArxivClient:
 
         """
         logger.debug(f"Making request to arXiv API with params: {params}")
-        response = self.client.get(self.BASE_URL, params=params)
-        response.raise_for_status()
-        return response.text
+        try:
+            response = self.client.get(self.BASE_URL, params=params)
+            response.raise_for_status()
+            return response.text
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP error occurred: {e.response.status_code} - {e.response.text}")
+            logger.error(f"Request URL: {e.request.url}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error during request: {e}")
+            raise
 
     def _parse_keyword_query(self, keywords: list[str], operator: str = "OR") -> str:
         """キーワードクエリを構築.
@@ -254,6 +265,7 @@ class ArxivClient:
 
         try:
             # APIリクエスト
+            logger.info(f"Searching arXiv with query: {query}")
             xml_response = self._make_request(params)
 
             # XMLパース
@@ -273,8 +285,14 @@ class ArxivClient:
 
             return papers
 
+        except httpx.HTTPStatusError as e:
+            logger.error(f"HTTP Status Error searching papers: {e}")
+            logger.error(f"Query was: {query}")
+            logger.error(f"Parameters: {params}")
+            return []
         except Exception as e:
             logger.error(f"Error searching papers: {e}")
+            logger.error(f"Query was: {query}")
             return []
 
     def get_recent_papers(
