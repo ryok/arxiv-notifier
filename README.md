@@ -23,7 +23,7 @@ arXivから指定したキーワードに関する最新の論文を定期的に
 
 1. リポジトリをクローン
 ```bash
-git clone https://github.com/yourusername/arxiv-notifier.git
+git clone https://github.com/ryok/arxiv-notifier
 cd arxiv-notifier
 ```
 
